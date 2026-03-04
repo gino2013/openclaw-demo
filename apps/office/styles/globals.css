@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --scale: 4;
+  --canvas-width: 640px;  /* 160 * 4 */
+  --canvas-height: 576px; /* 144 * 4 */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: #101010;
+  color: #f8f8f8;
+  font-family: 'Press Start 2P', monospace;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Force pixel-perfect rendering on all canvases */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Pokemon-style scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #306230;
+}
+
+/* HUD overlay */
+.hud-bar {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 1.6;
+}
+
+/* Dialog box — Pokemon style black border */
+.dialog-box {
+  border: 3px solid #101010;
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 #101010;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+}
+
+/* Blink animation for dialog arrow */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.blink {
+  animation: blink 1s step-end infinite;
+}

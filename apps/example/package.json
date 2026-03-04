@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw/example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo: two agents completing a task via OpenClaw",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@openclaw/core": "workspace:*",
+    "@openclaw/gateway": "workspace:*",
+    "@openclaw/orchestrator": "workspace:*",
+    "@openclaw/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
