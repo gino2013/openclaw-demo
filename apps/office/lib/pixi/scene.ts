@@ -120,7 +120,8 @@ export function playCelebration(app: PIXI.Application): void {
   // Spawn confetti
   for (let i = 0; i < 30; i++) {
     const g = new PIXI.Graphics()
-    g.rect(0, 0, 3, 3).fill(confettiColors[i % confettiColors.length] ?? 0xffffff)
+    g.rect(0, 0, 3, 3)
+    g.fill(confettiColors[i % confettiColors.length] ?? 0xffffff)
     g.position.set(Math.random() * app.screen.width, 0)
     app.stage.addChild(g)
     particles.push(g)

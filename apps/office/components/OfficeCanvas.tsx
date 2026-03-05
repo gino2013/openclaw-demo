@@ -17,17 +17,13 @@ const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 4)
 const NATIVE_W = 160
 const NATIVE_H = 144
 
-/**
- * Mounts the Pixi.js canvas and bridges Zustand state to the scene.
- * All Pixi logic lives in lib/pixi/; this component only wires React ↔ Pixi.
- */
 export default function OfficeCanvas(): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const appRef = useRef<PIXI.Application | null>(null)
 
   const { agents, pendingAnimations, completeDelegation, events } = useOfficeStore()
 
-  // Bootstrap Pixi
+  // Bootstrap Pixi — after init, sync any agents already in the store
   useEffect(() => {
     if (!containerRef.current || appRef.current) return
 
@@ -42,7 +38,6 @@ export default function OfficeCanvas(): React.JSX.Element {
       if (!containerRef.current) return
       appRef.current = app
 
-      // Apply CSS pixel scaling
       const canvas = app.canvas as HTMLCanvasElement
       canvas.style.width = `${NATIVE_W * SCALE}px`
       canvas.style.height = `${NATIVE_H * SCALE}px`
@@ -50,6 +45,13 @@ export default function OfficeCanvas(): React.JSX.Element {
       containerRef.current.appendChild(canvas)
 
       initScene(app)
+
+      // ── Critical: sync agents that loaded before Pixi was ready ──
+      const { agents: currentAgents } = useOfficeStore.getState()
+      for (const [id, agent] of currentAgents) {
+        addAgentSprite(app, id, agent.name, agent.role as AgentRole)
+        setAgentState(id, agent.status)
+      }
     })
 
     return () => {
@@ -58,11 +60,10 @@ export default function OfficeCanvas(): React.JSX.Element {
     }
   }, [])
 
-  // Sync agents → sprites
+  // Sync agents → sprites (handles agents that arrive after Pixi is ready)
   useEffect(() => {
     const app = appRef.current
     if (!app) return
-
     for (const [id, agent] of agents) {
       addAgentSprite(app, id, agent.name, agent.role as AgentRole)
       setAgentState(id, agent.status)
@@ -73,7 +74,6 @@ export default function OfficeCanvas(): React.JSX.Element {
   useEffect(() => {
     const app = appRef.current
     if (!app) return
-
     for (const anim of pendingAnimations) {
       triggerDelegationAnimation(app, anim.fromAgentId, anim.toAgentId)
       completeDelegation(anim.id)
@@ -84,7 +84,6 @@ export default function OfficeCanvas(): React.JSX.Element {
   useEffect(() => {
     const app = appRef.current
     if (!app) return
-
     const latest = events[0]
     if (latest?.type === WorkflowEventType.TASK_COMPLETED) {
       playCelebration(app)
