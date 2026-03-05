@@ -134,14 +134,14 @@ export abstract class OpenClawAgent {
           const result = await this.handle(task)
           this.send({
             type: 'TASK_RESULT',
-            correlationId: msg.correlationId,
+            ...(msg.correlationId !== undefined && { correlationId: msg.correlationId }),
             payload: { taskId: task.id, result },
           })
         } catch (err) {
           const error = err instanceof Error ? err.message : String(err)
           this.send({
             type: 'TASK_ERROR',
-            correlationId: msg.correlationId,
+            ...(msg.correlationId !== undefined && { correlationId: msg.correlationId }),
             payload: { taskId: task.id, error, retryable: false },
           })
         }

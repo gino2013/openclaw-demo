@@ -12,7 +12,7 @@ export class OpenClawError extends Error {
     super(message)
     this.name = 'OpenClawError'
     this.code = code
-    this.context = context
+    if (context !== undefined) this.context = context
     // Maintain proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype)
   }

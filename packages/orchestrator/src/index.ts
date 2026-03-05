@@ -1,3 +1,3 @@
-export { Orchestrator } from './orchestrator.js'
+export { Orchestrator } from './orchestrator'
 export { RoundRobinRouter } from './router.js'
 export type { RoutableAgent } from './router.js'

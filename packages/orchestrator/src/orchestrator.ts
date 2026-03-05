@@ -1,4 +1,5 @@
 import WebSocket from 'ws'
+import http from 'node:http'
 import { v4 as uuidv4 } from 'uuid'
 import {
   createLogger,
@@ -7,8 +8,8 @@ import {
   InvalidMessageError,
 } from '@openclaw/core'
 import type { Task, GatewayMessage, TaskAssignPayload, TaskResultPayload, TaskErrorPayload } from '@openclaw/core'
-import { RoundRobinRouter } from './router.js'
-import type { RoutableAgent } from './router.js'
+import { RoundRobinRouter } from './router'
+import type { RoutableAgent } from './router'
 
 const logger = createLogger('orchestrator')
 
@@ -56,6 +57,7 @@ export class Orchestrator {
       this.connected = true
       this.reconnectDelay = RECONNECT_BASE_MS
       logger.info('Connected to Gateway')
+      void this.syncAgents()
     })
 
     this.ws.on('message', (raw) => {
@@ -162,6 +164,36 @@ export class Orchestrator {
       default:
         logger.debug({ type: msg.type }, 'Unhandled message type in orchestrator')
     }
+  }
+
+  /** Fetch current agent list from Gateway REST API and populate local registry. */
+  private syncAgents(): Promise<void> {
+    const restUrl = this.gatewayUrl.replace(/^ws/, 'http') + '/agents'
+    return new Promise((resolve) => {
+      http.get(restUrl, (res) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => { data += chunk.toString() })
+        res.on('end', () => {
+          try {
+            const body = JSON.parse(data) as { agents: Array<{ id: string; role: string; status: string }> }
+            for (const agent of body.agents) {
+              this.agents.set(agent.id, {
+                id: agent.id,
+                role: agent.role as RoutableAgent['role'],
+                status: agent.status === 'busy' ? 'busy' : 'idle',
+              })
+            }
+            logger.info({ count: body.agents.length }, 'Synced agents from Gateway')
+          } catch {
+            logger.warn('Failed to parse agent list from Gateway')
+          }
+          resolve()
+        })
+      }).on('error', () => {
+        logger.warn('Could not reach Gateway REST API for agent sync')
+        resolve()
+      })
+    })
   }
 
   private scheduleReconnect(): void {

@@ -4,8 +4,8 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import { createLogger, WorkflowEventType, AuthError, InvalidMessageError } from '@openclaw/core'
 import type { GatewayMessage, RegisterPayload } from '@openclaw/core'
-import { AgentRegistry } from './agent-registry.js'
-import { EventBus } from './event-bus.js'
+import { AgentRegistry } from './agent-registry'
+import { EventBus } from './event-bus'
 
 const logger = createLogger('gateway')
 
@@ -22,6 +22,8 @@ export function createGatewayServer(): http.Server {
 
   const registry = new AgentRegistry()
   const eventBus = new EventBus()
+  // Maps taskId → orchestrator WebSocket, for result forwarding
+  const orchestratorSockets = new Map<string, WebSocket>()
   const app = express()
 
   app.use(express.json())
@@ -127,6 +129,30 @@ export function createGatewayServer(): http.Server {
           break
         }
 
+        case 'TASK_ASSIGN': {
+          // Orchestrator → Gateway → Agent forwarding
+          const payload = msg.payload as { task: { id: string; requiredRole: string; delegationChain: string[] } }
+          const { task } = payload
+          const candidates = registry.getByRole(task.requiredRole as Parameters<typeof registry.getByRole>[0])
+          const idle = candidates.find((a) => a.status === 'idle') ?? candidates[0]
+          if (!idle) {
+            socket.send(JSON.stringify({
+              type: 'TASK_ERROR',
+              correlationId: msg.correlationId,
+              payload: { taskId: task.id, error: `No agent available for role '${task.requiredRole}'`, retryable: true },
+            }))
+            break
+          }
+          registry.setStatus(idle.id, 'busy')
+          idle.socket.send(JSON.stringify({ type: 'TASK_ASSIGN', correlationId: msg.correlationId, payload: { task } }))
+          // Store reply-to socket so result can be forwarded back
+          orchestratorSockets.set(task.id, socket)
+          eventBus.emit(WorkflowEventType.TASK_DELEGATED, `Task '${task.id}' delegated to '${idle.name}'`, {
+            agentId: idle.id, taskId: task.id,
+          })
+          break
+        }
+
         case 'HEARTBEAT': {
           if (agentId) {
             registry.heartbeat(agentId)
@@ -151,11 +177,17 @@ export function createGatewayServer(): http.Server {
               { agentId, taskId: payload.taskId, data: { result: payload.result } }
             )
           }
+          // Forward result back to orchestrator
+          const orch = orchestratorSockets.get(payload.taskId)
+          if (orch?.readyState === 1) {
+            orch.send(JSON.stringify({ type: 'TASK_RESULT', correlationId: msg.correlationId, payload }))
+          }
+          orchestratorSockets.delete(payload.taskId)
           break
         }
 
         case 'TASK_ERROR': {
-          const payload = msg.payload as { taskId: string; error: string }
+          const payload = msg.payload as { taskId: string; error: string; retryable: boolean }
           if (agentId) {
             registry.setStatus(agentId, 'idle')
             eventBus.emit(
@@ -164,6 +196,12 @@ export function createGatewayServer(): http.Server {
               { agentId, taskId: payload.taskId }
             )
           }
+          // Forward error back to orchestrator
+          const orch = orchestratorSockets.get(payload.taskId)
+          if (orch?.readyState === 1) {
+            orch.send(JSON.stringify({ type: 'TASK_ERROR', correlationId: msg.correlationId, payload }))
+          }
+          orchestratorSockets.delete(payload.taskId)
           break
         }
 
