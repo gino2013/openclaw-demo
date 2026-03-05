@@ -7,12 +7,12 @@ export interface Position {
 
 function makeEnvelope(): PIXI.Graphics {
   const g = new PIXI.Graphics()
-  g.rect(0, 2, 8, 6)
+  g.rect(0, 4, 24, 18)
   g.fill(0xf8f8f0)
-  g.rect(0, 2, 8, 6)
-  g.stroke({ color: 0x101010, width: 1 })
-  g.moveTo(0, 2).lineTo(4, 5).lineTo(8, 2)
-  g.stroke({ color: 0x303030, width: 1 })
+  g.rect(0, 4, 24, 18)
+  g.stroke({ color: 0x101010, width: 2 })
+  g.moveTo(0, 4).lineTo(12, 14).lineTo(24, 4)
+  g.stroke({ color: 0x303030, width: 2 })
   return g
 }
 
@@ -31,7 +31,7 @@ export function animateTaskDelegation(
   app.stage.addChild(envelope)
 
   const cpX = (from.x + to.x) / 2
-  const cpY = Math.min(from.y, to.y) - 30
+  const cpY = Math.min(from.y, to.y) - 120
 
   let t = 0
   const DURATION = 60

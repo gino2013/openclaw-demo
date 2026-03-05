@@ -24,26 +24,33 @@ export default function OfficeCanvas(): React.JSX.Element {
   useEffect(() => {
     if (!containerRef.current || appRef.current) return
     const el = containerRef.current
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
 
     const app = new PIXI.Application()
     void preloadSprites().then(() =>
       app.init({
         width: CANVAS_W,
         height: CANVAS_H,
-        // HiDPI: render at full device resolution for crisp text + sprites
-        resolution: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
-        autoDensity: true,   // canvas CSS size stays CANVAS_W × CANVAS_H
+        resolution: dpr,
+        autoDensity: true,   // CSS canvas = CANVAS_W×CANVAS_H, internal = ×dpr
         backgroundColor: 0x1a1a2e,
-        antialias: false,    // keep pixel art crisp
+        antialias: false,
       })
     ).then(() => {
       if (!el) return
       appRef.current = app
 
       const canvas = app.canvas as HTMLCanvasElement
-      // Fill the container — image-rendering: pixelated gives crisp nearest-neighbor upscale
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
+
+      // Scale to fill container while preserving aspect ratio
+      const cw = el.clientWidth
+      const ch = el.clientHeight
+      const scale = Math.min(cw / CANVAS_W, ch / CANVAS_H)
+      const displayW = Math.round(CANVAS_W * scale)
+      const displayH = Math.round(CANVAS_H * scale)
+
+      canvas.style.width = `${displayW}px`
+      canvas.style.height = `${displayH}px`
       canvas.style.imageRendering = 'pixelated'
       canvas.style.display = 'block'
       el.appendChild(canvas)
@@ -93,8 +100,7 @@ export default function OfficeCanvas(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full bg-gba-black"
-      style={{ imageRendering: 'pixelated' }}
+      className="flex items-center justify-center w-full h-full bg-gba-black"
     />
   )
 }

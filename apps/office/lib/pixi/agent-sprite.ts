@@ -5,11 +5,8 @@ import { getSpriteTexture } from './preload-sprites'
 
 export type AgentState = 'idle' | 'thinking' | 'working' | 'success' | 'error' | 'offline'
 
-/** Pokemon sprite display size in canvas pixels (matches 96px source at ~2:1 ratio) */
-const SPRITE_SIZE = 48
-
-/** Text resolution multiplier — keeps labels crisp when canvas is CSS-scaled */
-const TEXT_RES = 2
+/** 96px matches PokeAPI source sprites exactly — zero upscale loss */
+const SPRITE_SIZE = 96
 
 export class AgentSprite {
   readonly container: PIXI.Container
@@ -47,7 +44,7 @@ export class AgentSprite {
     this.container.cursor = 'pointer'
     this.container.on('pointerdown', () => this.onPointerDown?.(agentId))
 
-    // ── Pokemon sprite ───────────────────────────────────────────────────
+    // ── Pokemon sprite (96×96 — exact source resolution) ────────────────
     const texture = getSpriteTexture(role)
     this.charSprite = new PIXI.Sprite(texture)
     this.charSprite.width = SPRITE_SIZE
@@ -56,12 +53,12 @@ export class AgentSprite {
 
     // ── State bubble above head ──────────────────────────────────────────
     this.bubble = new PIXI.Container()
-    this.bubble.position.set(0, -24)
+    this.bubble.position.set(0, -48)
     this.container.addChild(this.bubble)
 
-    // ── Name + status label box below sprite ─────────────────────────────
+    // ── Name + status label below sprite ────────────────────────────────
     this.label = new PIXI.Container()
-    this.label.position.set(-8, SPRITE_SIZE + 4)
+    this.label.position.set(-16, SPRITE_SIZE + 8)
     this.container.addChild(this.label)
 
     this.refreshBubble()
@@ -93,21 +90,15 @@ export class AgentSprite {
     this.container.destroy({ children: true })
   }
 
-  // ── Private ─────────────────────────────────────────────────────────────
-
-  private makeText(text: string, fontSize: number, fill: number): PIXI.Text {
+  private txt(text: string, size: number, fill: number, pixel = false): PIXI.Text {
     return new PIXI.Text({
       text,
-      style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize, fill }),
-      resolution: TEXT_RES,
-    })
-  }
-
-  private makePixelText(text: string, fontSize: number, fill: number): PIXI.Text {
-    return new PIXI.Text({
-      text,
-      style: new PIXI.TextStyle({ fontFamily: '"Press Start 2P", monospace', fontSize, fill }),
-      resolution: TEXT_RES,
+      style: new PIXI.TextStyle({
+        fontFamily: pixel ? '"Press Start 2P", monospace' : 'monospace',
+        fontSize: size,
+        fill,
+      }),
+      resolution: 2,
     })
   }
 
@@ -117,37 +108,31 @@ export class AgentSprite {
 
     switch (this.currentState) {
       case 'thinking': {
-        bg.roundRect(0, 0, 36, 20, 3); bg.fill(0xffffff); bg.stroke({ color: 0x101010, width: 1 })
-        const t = this.makeText('...', 10, 0x101010); t.position.set(4, 4)
-        this.bubble.addChild(bg, t)
-        break
+        bg.roundRect(0, 0, 72, 40, 6); bg.fill(0xffffff); bg.stroke({ color: 0x101010, width: 2 })
+        const t = this.txt('...', 20, 0x101010); t.position.set(8, 8)
+        this.bubble.addChild(bg, t); break
       }
       case 'working': {
-        bg.roundRect(0, 0, 40, 20, 3); bg.fill(0x203020); bg.stroke({ color: 0x00ff40, width: 1 })
-        const t = this.makeText('>>>', 10, 0x00ff40); t.position.set(4, 4)
-        this.bubble.addChild(bg, t)
-        break
+        bg.roundRect(0, 0, 80, 40, 6); bg.fill(0x203020); bg.stroke({ color: 0x00ff40, width: 2 })
+        const t = this.txt('>>>', 20, 0x00ff40); t.position.set(8, 8)
+        this.bubble.addChild(bg, t); break
       }
       case 'success': {
-        bg.roundRect(0, 0, 32, 20, 3); bg.fill(0x302000); bg.stroke({ color: 0xffe000, width: 1 })
-        const t = this.makeText('★', 14, 0xffe000); t.position.set(6, 2)
-        this.bubble.addChild(bg, t)
-        break
+        bg.roundRect(0, 0, 64, 40, 6); bg.fill(0x302000); bg.stroke({ color: 0xffe000, width: 2 })
+        const t = this.txt('★', 28, 0xffe000); t.position.set(12, 4)
+        this.bubble.addChild(bg, t); break
       }
       case 'error': {
-        bg.roundRect(0, 0, 32, 24, 3); bg.fill(0x300000); bg.stroke({ color: 0xff4040, width: 1 })
-        const t = this.makeText('?!', 12, 0xff4040); t.position.set(4, 4)
-        this.bubble.addChild(bg, t)
-        break
+        bg.roundRect(0, 0, 64, 48, 6); bg.fill(0x300000); bg.stroke({ color: 0xff4040, width: 2 })
+        const t = this.txt('?!', 24, 0xff4040); t.position.set(8, 8)
+        this.bubble.addChild(bg, t); break
       }
       case 'offline': {
-        bg.roundRect(0, 0, 40, 20, 3); bg.fill(0x202020); bg.stroke({ color: 0x808080, width: 1 })
-        const t = this.makeText('ZZZ', 10, 0x888888); t.position.set(4, 4)
-        this.bubble.addChild(bg, t)
-        break
+        bg.roundRect(0, 0, 80, 40, 6); bg.fill(0x202020); bg.stroke({ color: 0x808080, width: 2 })
+        const t = this.txt('ZZZ', 20, 0x888888); t.position.set(8, 8)
+        this.bubble.addChild(bg, t); break
       }
-      default:
-        break
+      default: break
     }
   }
 
@@ -159,25 +144,25 @@ export class AgentSprite {
       success: 0xffe000, error: 0xff4040, offline: 0x666666,
     }
     const statusText: Record<AgentState, string> = {
-      idle: 'idle', thinking: 'thinking', working: 'working',
-      success: 'done', error: 'error', offline: 'offline',
+      idle: 'IDLE', thinking: 'THINKING', working: 'WORKING',
+      success: 'DONE', error: 'ERROR', offline: 'OFFLINE',
     }
 
     const name = (this.agentName || this.agentId).toUpperCase().slice(0, 10)
-    const boxW = Math.max(name.length * 8 + 8, 80)
+    const boxW = Math.max(name.length * 10 + 16, 120)
 
     const bg = new PIXI.Graphics()
-    bg.roundRect(0, 0, boxW, 28, 2)
+    bg.roundRect(0, 0, boxW, 48, 4)
     bg.fill(0x101010)
-    bg.stroke({ color: 0x404040, width: 1 })
+    bg.stroke({ color: 0x404040, width: 2 })
     this.label.addChild(bg)
 
-    const nameTxt = this.makePixelText(name, 6, 0xffffff)
-    nameTxt.position.set(4, 3)
+    const nameTxt = this.txt(name, 12, 0xffffff, true)
+    nameTxt.position.set(8, 6)
     this.label.addChild(nameTxt)
 
-    const statusTxt = this.makePixelText(statusText[this.currentState], 6, statusColor[this.currentState])
-    statusTxt.position.set(4, 14)
+    const statusTxt = this.txt(statusText[this.currentState], 10, statusColor[this.currentState], true)
+    statusTxt.position.set(8, 26)
     this.label.addChild(statusTxt)
   }
 
@@ -187,7 +172,7 @@ export class AgentSprite {
 
     switch (this.currentState) {
       case 'idle':
-        this.container.y = this.baseY + Math.sin(this.bobTick) * 2
+        this.container.y = this.baseY + Math.sin(this.bobTick) * 3
         this.container.x = this.baseX
         break
       case 'thinking':
@@ -198,15 +183,15 @@ export class AgentSprite {
         }
         break
       case 'working':
-        this.container.y = this.baseY + Math.sin(this.bobTick * 5) * 1.5
-        this.container.x = this.baseX + Math.sin(this.bobTick * 7) * 1.2
+        this.container.y = this.baseY + Math.sin(this.bobTick * 5) * 2.5
+        this.container.x = this.baseX + Math.sin(this.bobTick * 7) * 2
         break
       case 'success':
-        this.container.y = this.baseY + Math.abs(Math.sin(this.bobTick * 4)) * -10
+        this.container.y = this.baseY + Math.abs(Math.sin(this.bobTick * 4)) * -16
         this.container.x = this.baseX
         break
       case 'error':
-        this.container.x = this.baseX + Math.sin(this.bobTick * 12) * 3
+        this.container.x = this.baseX + Math.sin(this.bobTick * 12) * 5
         this.container.y = this.baseY
         break
       case 'offline':

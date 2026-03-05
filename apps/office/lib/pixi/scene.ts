@@ -28,13 +28,13 @@ function updateConnections(): void {
   const sprites = Array.from(agentSprites.values())
   // Draw from first agent (typically lowest seat) to all others
   const hub = sprites[0]!
-  const hubCx = hub.container.x + 24
-  const hubCy = hub.container.y + 24
+  const hubCx = hub.container.x + 48
+  const hubCy = hub.container.y + 48
 
   for (let i = 1; i < sprites.length; i++) {
     const s = sprites[i]!
-    const cx = s.container.x + 24
-    const cy = s.container.y + 24
+    const cx = s.container.x + 48
+    const cy = s.container.y + 48
     connectionLayer.moveTo(hubCx, hubCy).lineTo(cx, cy)
     connectionLayer.stroke({ color: 0xffffff, width: 1, alpha: 0.3 })
     connectionLayer.circle(cx, cy, 2)
@@ -94,8 +94,8 @@ export function triggerDelegationAnimation(
   const to = agentSprites.get(toId)
   if (!from || !to) return
 
-  const fp = { x: from.container.x + 24, y: from.container.y + 24 }
-  const tp = { x: to.container.x + 24,   y: to.container.y + 24 }
+  const fp = { x: from.container.x + 48, y: from.container.y + 48 }
+  const tp = { x: to.container.x + 48,   y: to.container.y + 48 }
 
   animateTaskDelegation(app, fp, tp, () => {
     to.highlight()
