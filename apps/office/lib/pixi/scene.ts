@@ -5,31 +5,56 @@ import type { AgentState } from './agent-sprite'
 import { animateTaskDelegation } from './mail-animation'
 import type { AgentRole } from '@openclaw/core'
 
-/** Tracks all live agent sprites keyed by agent ID */
 const agentSprites = new Map<string, AgentSprite>()
-
-/** Next available seat index */
 let nextSeat = 0
 
+/** Connection lines layer (drawn between agents like reference image) */
+let connectionLayer: PIXI.Graphics | null = null
+
 /**
- * Initialise the full office scene.
- * Call once after the PIXI Application is created.
- *
- * @param app - The PIXI application instance
+ * Initialise the office scene.
  */
 export function initScene(app: PIXI.Application): void {
   const tilemapLayer = new PIXI.Container()
   buildTilemap(tilemapLayer, app)
   app.stage.addChild(tilemapLayer)
+
+  // Connection lines drawn below sprites
+  connectionLayer = new PIXI.Graphics()
+  app.stage.addChild(connectionLayer)
+}
+
+/** Redraw connection lines between orchestrator and all other agents */
+function updateConnections(): void {
+  if (!connectionLayer) return
+  connectionLayer.clear()
+
+  const orchEntry = Array.from(agentSprites.entries()).find(([, s]) => {
+    // orchestrator sits at seat 0
+    return s.container.x < TILE_SIZE * 12 && s.container.x > TILE_SIZE * 6 &&
+           s.container.y > TILE_SIZE * 4 && s.container.y < TILE_SIZE * 9
+  })
+  if (!orchEntry) return
+
+  const [, orchSprite] = orchEntry
+  const orchCx = orchSprite.container.x + 16
+  const orchCy = orchSprite.container.y + 16
+
+  for (const [id, sprite] of agentSprites) {
+    if (sprite === orchSprite) continue
+    const cx = sprite.container.x + 16
+    const cy = sprite.container.y + 16
+    connectionLayer.moveTo(orchCx, orchCy).lineTo(cx, cy)
+    connectionLayer.stroke({ color: 0xffffff, width: 1, alpha: 0.35 })
+
+    // Dot at each end
+    connectionLayer.circle(cx, cy, 2)
+    connectionLayer.fill({ color: 0xffffff, alpha: 0.5 })
+  }
 }
 
 /**
  * Add a new agent sprite to the scene.
- *
- * @param app - The PIXI application
- * @param agentId - Unique agent ID
- * @param name - Display name
- * @param role - Agent role (determines sprite color)
  */
 export function addAgentSprite(
   app: PIXI.Application,
@@ -39,122 +64,90 @@ export function addAgentSprite(
 ): void {
   if (agentSprites.has(agentId)) return
 
-  const seatIndex = nextSeat % SEAT_POSITIONS.length
-  nextSeat++
-  const seat = SEAT_POSITIONS[seatIndex] ?? { x: 1, y: 1 }
+  // Orchestrator always at center (seat 0), others fill remaining seats
+  let seatIndex: number
+  if (role === 'orchestrator') {
+    seatIndex = 0
+  } else {
+    // Start from seat 1 for non-orchestrators
+    const used = new Set(Array.from(agentSprites.values()).map((_, i) => i))
+    seatIndex = 1
+    while (used.has(seatIndex) && seatIndex < SEAT_POSITIONS.length) seatIndex++
+    nextSeat = Math.max(nextSeat, seatIndex + 1)
+  }
 
-  // Offset sprite to sit above the desk tile
-  const position = { x: seat.x, y: seat.y - 1 }
+  const seat = SEAT_POSITIONS[seatIndex] ?? SEAT_POSITIONS[nextSeat % SEAT_POSITIONS.length] ?? { x: 1, y: 1 }
+  if (role !== 'orchestrator') nextSeat++
 
-  const sprite = new AgentSprite(agentId, role, position, app)
+  const sprite = new AgentSprite(agentId, role, seat, app)
   sprite.setName(name)
 
   sprite.onPointerDown = (id) => {
-    // Emit a custom event the React layer can listen to
-    const event = new CustomEvent('openclaw:agentclick', { detail: { agentId: id } })
-    window.dispatchEvent(event)
+    window.dispatchEvent(new CustomEvent('openclaw:agentclick', { detail: { agentId: id } }))
   }
 
   app.stage.addChild(sprite.container)
   agentSprites.set(agentId, sprite)
+  updateConnections()
 }
 
-/**
- * Update an agent sprite's visual state.
- */
 export function setAgentState(agentId: string, state: AgentState): void {
   agentSprites.get(agentId)?.setState(state)
 }
 
-/**
- * Remove an agent sprite from the scene.
- */
 export function removeAgentSprite(agentId: string): void {
-  const sprite = agentSprites.get(agentId)
-  if (sprite) {
-    sprite.destroy()
-    agentSprites.delete(agentId)
-  }
+  const s = agentSprites.get(agentId)
+  if (s) { s.destroy(); agentSprites.delete(agentId) }
+  updateConnections()
 }
 
-/**
- * Trigger the envelope delegation animation between two agents.
- *
- * @param app - The PIXI application
- * @param fromId - Source agent ID
- * @param toId - Destination agent ID
- */
 export function triggerDelegationAnimation(
   app: PIXI.Application,
   fromId: string,
   toId: string
 ): void {
-  const fromSprite = agentSprites.get(fromId)
-  const toSprite = agentSprites.get(toId)
-  if (!fromSprite || !toSprite) return
+  const from = agentSprites.get(fromId)
+  const to = agentSprites.get(toId)
+  if (!from || !to) return
 
-  const fromPos = {
-    x: fromSprite.container.x + TILE_SIZE / 2,
-    y: fromSprite.container.y + TILE_SIZE / 2,
-  }
-  const toPos = {
-    x: toSprite.container.x + TILE_SIZE / 2,
-    y: toSprite.container.y + TILE_SIZE / 2,
-  }
+  const fp = { x: from.container.x + 16, y: from.container.y + 16 }
+  const tp = { x: to.container.x + 16,   y: to.container.y + 16 }
 
-  animateTaskDelegation(app, fromPos, toPos, () => {
-    toSprite.highlight()
-    toSprite.setState('working')
+  animateTaskDelegation(app, fp, tp, () => {
+    to.highlight()
+    to.setState('working')
   })
 }
 
-/**
- * Play a celebration animation — all agents jump + confetti.
- *
- * @param app - The PIXI application
- */
+/** Celebration: all agents jump + confetti */
 export function playCelebration(app: PIXI.Application): void {
-  const confettiColors = [0xe03030, 0xffe000, 0x3060e0, 0x30a030]
+  const colors = [0xe03030, 0xffe000, 0x3060e0, 0x30a030, 0xff80c0]
   const particles: PIXI.Graphics[] = []
 
-  // Spawn confetti
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 40; i++) {
     const g = new PIXI.Graphics()
     g.rect(0, 0, 3, 3)
-    g.fill(confettiColors[i % confettiColors.length] ?? 0xffffff)
-    g.position.set(Math.random() * app.screen.width, 0)
+    g.fill(colors[i % colors.length] ?? 0xffffff)
+    g.position.set(Math.random() * app.screen.width, -4)
     app.stage.addChild(g)
     particles.push(g)
   }
 
-  // Make all agents jump
-  for (const sprite of agentSprites.values()) {
-    sprite.setState('success')
-  }
+  for (const sprite of agentSprites.values()) sprite.setState('success')
 
   let frame = 0
-  const DURATION = 120
-
-  function celebrationTick(): void {
+  const tick = (): void => {
     frame++
     for (const p of particles) {
-      p.y += 2 + Math.random() * 2
+      p.y += 2.5 + Math.random() * 2
       p.x += (Math.random() - 0.5) * 2
-      p.rotation += 0.1
+      p.rotation += 0.15
     }
-
-    if (frame >= DURATION) {
-      app.ticker.remove(celebrationTick)
-      for (const p of particles) {
-        app.stage.removeChild(p)
-        p.destroy()
-      }
-      // Return all agents to idle
-      for (const sprite of agentSprites.values()) {
-        sprite.setState('idle')
-      }
+    if (frame >= 120) {
+      app.ticker.remove(tick)
+      for (const p of particles) { app.stage.removeChild(p); p.destroy() }
+      for (const sprite of agentSprites.values()) sprite.setState('idle')
     }
   }
-
-  app.ticker.add(celebrationTick)
+  app.ticker.add(tick)
 }

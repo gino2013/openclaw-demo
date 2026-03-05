@@ -13,9 +13,9 @@ import {
 import type { AgentRole } from '@openclaw/core'
 import { WorkflowEventType } from '@openclaw/core'
 
-const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 4)
-const NATIVE_W = 160
-const NATIVE_H = 144
+const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 3)
+const NATIVE_W = 320
+const NATIVE_H = 240
 
 export default function OfficeCanvas(): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)

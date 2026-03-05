@@ -1,44 +1,37 @@
 import * as PIXI from 'pixi.js'
 import type { AgentRole } from '@openclaw/core'
 import { TILE_SIZE } from './tilemap'
+import { getCharPixels, drawPixelChar } from './pixel-chars'
 
 export type AgentState = 'idle' | 'thinking' | 'working' | 'success' | 'error' | 'offline'
 
-/** Role → body color mapping (Pokemon-inspired) */
-const ROLE_COLORS: Record<AgentRole, number> = {
-  orchestrator: 0xe03030,
-  developer:    0x3060e0,
-  reviewer:     0x30a030,
-  analyst:      0xe0c000,
-  custom:       0x9030c0,
-}
-
-export interface AgentDialogContent {
-  agentId: string
-  name: string
-  role: string
-  currentTask?: string
-  recentTasks: string[]
-}
+/** Pixel size for character rendering (2 = each "pixel" is 2×2 canvas units) */
+const PX = 2
+/** Character render width/height in canvas units (16px × PX) */
+const CHAR_W = 16 * PX  // 32
+const CHAR_H = 20 * PX  // 40 (includes tail/feet rows)
 
 /**
- * Manages a single agent's Pixi.js sprite with state-based animation.
- * // TODO: replace placeholder graphics with actual pixel art sprites
+ * Manages a single agent's Pokemon-inspired pixel-art sprite.
+ * // TODO: replace with actual pixel art spritesheets
  */
 export class AgentSprite {
   readonly container: PIXI.Container
 
-  private body: PIXI.Graphics
-  private bubble: PIXI.Container
+  private charGfx: PIXI.Graphics    // pixel art body
+  private bubble: PIXI.Container    // state bubble above head
   private nameTag: PIXI.Text
+  private label: PIXI.Container     // name + status label box (like the reference image)
+
   private currentState: AgentState = 'idle'
   private bobTick = 0
   private blinkTick = 0
   private baseX: number
   private baseY: number
 
-  private readonly color: number
+  private readonly role: AgentRole
   private readonly agentId: string
+  private agentName = ''
 
   onPointerDown?: (agentId: string) => void
 
@@ -49,53 +42,62 @@ export class AgentSprite {
     private readonly app: PIXI.Application
   ) {
     this.agentId = agentId
-    this.color = ROLE_COLORS[role] ?? ROLE_COLORS.custom
+    this.role = role
+    this.baseX = position.x * TILE_SIZE - CHAR_W / 2 + TILE_SIZE / 2
+    this.baseY = position.y * TILE_SIZE - CHAR_H + TILE_SIZE / 2
 
     this.container = new PIXI.Container()
-    this.baseX = position.x * TILE_SIZE
-    this.baseY = position.y * TILE_SIZE
     this.container.position.set(this.baseX, this.baseY)
     this.container.eventMode = 'static'
     this.container.cursor = 'pointer'
-    this.container.on('pointerdown', () => this.onPointerDown?.(this.agentId))
+    this.container.on('pointerdown', () => this.onPointerDown?.(agentId))
 
-    // Body blob (16×14 px placeholder sprite)
-    this.body = new PIXI.Graphics()
-    this.redrawBody()
-    this.container.addChild(this.body)
+    // ── Pixel art character ──────────────────────────────────────────────
+    this.charGfx = new PIXI.Graphics()
+    this.redrawChar()
+    this.container.addChild(this.charGfx)
 
-    // State bubble (above the sprite)
+    // ── Bubble (above head) ──────────────────────────────────────────────
     this.bubble = new PIXI.Container()
-    this.bubble.position.set(0, -12)
+    this.bubble.position.set(CHAR_W / 2 - 8, -14)
     this.container.addChild(this.bubble)
 
-    // Name tag below
+    // ── Name label box (like reference image: black box, colored text) ───
+    this.label = new PIXI.Container()
+    this.label.position.set(-6, CHAR_H + 1)
+    this.container.addChild(this.label)
+
     this.nameTag = new PIXI.Text({
-      text: agentId.slice(0, 6),
+      text: agentId.slice(0, 8),
       style: new PIXI.TextStyle({
-        fontFamily: 'monospace',
-        fontSize: 5,
-        fill: 0xffffff,
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: 4,
+        fill: 0x00ff88,
       }),
     })
-    this.nameTag.position.set(0, 15)
-    this.container.addChild(this.nameTag)
+    this.nameTag.position.set(2, 2)
+    this.label.addChild(this.nameTag)
 
     this.app.ticker.add(this.onTick, this)
   }
 
   setState(state: AgentState): void {
+    if (this.currentState === state) return
     this.currentState = state
+    this.redrawChar()
     this.refreshBubble()
+    this.refreshLabel()
   }
 
   setName(name: string): void {
-    this.nameTag.text = name.slice(0, 8)
+    this.agentName = name
+    this.nameTag.text = name.toUpperCase().slice(0, 10)
+    this.refreshLabel()
   }
 
   highlight(): void {
-    this.body.tint = 0xffffff
-    setTimeout(() => { this.body.tint = 0xffffff }, 200)
+    this.charGfx.tint = 0xffffff
+    setTimeout(() => { this.charGfx.tint = 0xffffff }, 300)
   }
 
   destroy(): void {
@@ -105,85 +107,77 @@ export class AgentSprite {
 
   // ── Private ─────────────────────────────────────────────────────────────
 
-  private redrawBody(): void {
-    this.body.clear()
-    const c = this.color
-    const dark = this.darken(c, 0.65)
-    // Head
-    this.body.roundRect(3, 0, 10, 10, 3)
-    this.body.fill(c)
-    // Body
-    this.body.roundRect(2, 8, 12, 6, 2)
-    this.body.fill(dark)
-    // Eyes
-    this.body.rect(5, 3, 2, 2)
-    this.body.fill(0xffffff)
-    this.body.rect(9, 3, 2, 2)
-    this.body.fill(0xffffff)
-    this.body.rect(6, 4, 1, 1)
-    this.body.fill(0x101010)
-    this.body.rect(10, 4, 1, 1)
-    this.body.fill(0x101010)
-    // Outline
-    this.body.roundRect(3, 0, 10, 10, 3)
-    this.body.stroke({ color: 0x101010, width: 1 })
-    this.body.roundRect(2, 8, 12, 6, 2)
-    this.body.stroke({ color: 0x101010, width: 1 })
+  private redrawChar(): void {
+    this.charGfx.clear()
+    const pixels = getCharPixels(this.role)
+
+    if (this.currentState === 'offline') {
+      // Greyscale tint
+      this.charGfx.tint = 0x888888
+    } else {
+      this.charGfx.tint = 0xffffff
+    }
+
+    drawPixelChar(this.charGfx, pixels, PX)
   }
 
   private refreshBubble(): void {
     this.bubble.removeChildren()
 
+    const bg = new PIXI.Graphics()
+    const txt = new PIXI.Text({
+      text: '',
+      style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize: 5, fill: 0x101010 }),
+    })
+
     switch (this.currentState) {
       case 'thinking': {
-        const g = new PIXI.Graphics()
-        g.roundRect(0, 0, 14, 8, 2)
-        g.fill(0xffffff)
-        g.stroke({ color: 0x101010, width: 1 })
-        const t = new PIXI.Text({ text: '...', style: new PIXI.TextStyle({ fontSize: 5, fill: 0x101010, fontFamily: 'monospace' }) })
-        t.position.set(2, 1)
-        this.bubble.addChild(g, t)
+        bg.roundRect(0, 0, 18, 10, 2)
+        bg.fill(0xffffff)
+        bg.stroke({ color: 0x101010, width: 1 })
+        txt.text = '...'
+        txt.position.set(2, 2)
+        this.bubble.addChild(bg, txt)
         break
       }
       case 'working': {
-        const g = new PIXI.Graphics()
-        g.roundRect(0, 0, 14, 8, 2)
-        g.fill(0x30c030)
-        g.stroke({ color: 0x101010, width: 1 })
-        const t = new PIXI.Text({ text: '>>>', style: new PIXI.TextStyle({ fontSize: 5, fill: 0xffffff, fontFamily: 'monospace' }) })
-        t.position.set(1, 1)
-        this.bubble.addChild(g, t)
+        // ">>>" green box like reference
+        bg.roundRect(0, 0, 20, 10, 2)
+        bg.fill(0x203020)
+        bg.stroke({ color: 0x00ff40, width: 1 })
+        const wt = new PIXI.Text({ text: '>>>', style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize: 5, fill: 0x00ff40 }) })
+        wt.position.set(2, 2)
+        this.bubble.addChild(bg, wt)
         break
       }
       case 'success': {
-        const g = new PIXI.Graphics()
-        // Draw a simple star shape manually
-        g.rect(4, 0, 4, 10)
-        g.fill(0xffe000)
-        g.rect(0, 3, 12, 4)
-        g.fill(0xffe000)
-        g.stroke({ color: 0x101010, width: 1 })
-        this.bubble.addChild(g)
+        // Gold star box
+        bg.roundRect(0, 0, 16, 10, 2)
+        bg.fill(0x302000)
+        bg.stroke({ color: 0xffe000, width: 1 })
+        const st = new PIXI.Text({ text: '★', style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize: 7, fill: 0xffe000 }) })
+        st.position.set(3, 1)
+        this.bubble.addChild(bg, st)
         break
       }
       case 'error': {
-        const g = new PIXI.Graphics()
-        g.roundRect(0, 0, 10, 10, 2)
-        g.fill(0xff4040)
-        g.stroke({ color: 0x101010, width: 1 })
-        const t = new PIXI.Text({ text: '!', style: new PIXI.TextStyle({ fontSize: 8, fill: 0xffffff, fontFamily: 'monospace', fontWeight: 'bold' }) })
-        t.position.set(3, 0)
-        this.bubble.addChild(g, t)
+        // Red "?" box
+        bg.roundRect(0, 0, 16, 12, 2)
+        bg.fill(0x300000)
+        bg.stroke({ color: 0xff4040, width: 1 })
+        const et = new PIXI.Text({ text: '?!', style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize: 6, fill: 0xff4040 }) })
+        et.position.set(2, 2)
+        this.bubble.addChild(bg, et)
         break
       }
       case 'offline': {
-        const g = new PIXI.Graphics()
-        g.roundRect(0, 0, 16, 8, 2)
-        g.fill(0x808080)
-        g.stroke({ color: 0x505050, width: 1 })
-        const t = new PIXI.Text({ text: 'ZZZ', style: new PIXI.TextStyle({ fontSize: 5, fill: 0xdddddd, fontFamily: 'monospace' }) })
-        t.position.set(1, 1)
-        this.bubble.addChild(g, t)
+        // "ZZZ" grey box
+        bg.roundRect(0, 0, 20, 10, 2)
+        bg.fill(0x202020)
+        bg.stroke({ color: 0x808080, width: 1 })
+        const zt = new PIXI.Text({ text: 'ZZZ', style: new PIXI.TextStyle({ fontFamily: 'monospace', fontSize: 5, fill: 0x888888 }) })
+        zt.position.set(2, 2)
+        this.bubble.addChild(bg, zt)
         break
       }
       default:
@@ -191,54 +185,93 @@ export class AgentSprite {
     }
   }
 
+  private refreshLabel(): void {
+    this.label.removeChildren()
+
+    const statusColor: Record<AgentState, number> = {
+      idle:     0x88ffaa,
+      thinking: 0x88aaff,
+      working:  0x00ff88,
+      success:  0xffe000,
+      error:    0xff4040,
+      offline:  0x666666,
+    }
+    const statusText: Record<AgentState, string> = {
+      idle:     'idle',
+      thinking: 'thinking',
+      working:  'working',
+      success:  'success',
+      error:    'error',
+      offline:  'offline',
+    }
+
+    // Measure text width
+    const name = (this.agentName || this.agentId).toUpperCase().slice(0, 10)
+    const boxW = Math.max(name.length * 5, 50) + 6
+
+    const bg = new PIXI.Graphics()
+    bg.roundRect(0, 0, boxW, 18, 1)
+    bg.fill(0x101010)
+    bg.stroke({ color: 0x404040, width: 1 })
+    this.label.addChild(bg)
+
+    const nameTxt = new PIXI.Text({
+      text: name,
+      style: new PIXI.TextStyle({ fontFamily: '"Press Start 2P", monospace', fontSize: 4, fill: 0xffffff }),
+    })
+    nameTxt.position.set(3, 2)
+    this.label.addChild(nameTxt)
+
+    const statusTxt = new PIXI.Text({
+      text: statusText[this.currentState],
+      style: new PIXI.TextStyle({ fontFamily: '"Press Start 2P", monospace', fontSize: 4, fill: statusColor[this.currentState] }),
+    })
+    statusTxt.position.set(3, 9)
+    this.label.addChild(statusTxt)
+  }
+
   private onTick(): void {
-    this.bobTick += 0.06
+    this.bobTick += 0.07
     this.blinkTick++
 
     switch (this.currentState) {
       case 'idle':
-        // Gentle bob
-        this.container.y = this.baseY + Math.sin(this.bobTick) * 0.8
-        this.body.tint = 0xffffff
+        // Gentle breathing bob
+        this.container.y = this.baseY + Math.sin(this.bobTick) * 1.2
+        this.container.x = this.baseX
         break
 
       case 'thinking':
         this.container.y = this.baseY
-        if (this.blinkTick % 20 === 0) {
+        this.container.x = this.baseX
+        // Blink bubble dots
+        if (this.blinkTick % 25 === 0) {
           this.bubble.alpha = this.bubble.alpha > 0.5 ? 0.2 : 1.0
         }
         break
 
       case 'working':
-        // Fast bob
-        this.container.y = this.baseY + Math.sin(this.bobTick * 4) * 1.2
-        this.container.x = this.baseX + Math.sin(this.bobTick * 6) * 0.5
+        // Typing shake
+        this.container.y = this.baseY + Math.sin(this.bobTick * 5) * 0.8
+        this.container.x = this.baseX + Math.sin(this.bobTick * 7) * 0.6
         break
 
       case 'success':
-        // Jump
-        this.container.y = this.baseY + Math.sin(this.bobTick * 3) * 3
+        // Jump!
+        this.container.y = this.baseY + Math.abs(Math.sin(this.bobTick * 4)) * -6
         this.container.x = this.baseX
         break
 
       case 'error':
-        // Shake
-        this.container.x = this.baseX + Math.sin(this.bobTick * 10) * 1.5
+        // Head shake
+        this.container.x = this.baseX + Math.sin(this.bobTick * 12) * 2
         this.container.y = this.baseY
         break
 
       case 'offline':
         this.container.y = this.baseY
         this.container.x = this.baseX
-        this.body.tint = 0x888888
         break
     }
-  }
-
-  private darken(color: number, factor: number): number {
-    const r = Math.floor(((color >> 16) & 0xff) * factor)
-    const g = Math.floor(((color >> 8) & 0xff) * factor)
-    const b = Math.floor((color & 0xff) * factor)
-    return (r << 16) | (g << 8) | b
   }
 }
