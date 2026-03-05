@@ -42,17 +42,22 @@ export default function OfficeCanvas(): React.JSX.Element {
 
       const canvas = app.canvas as HTMLCanvasElement
 
-      // Scale to fill container while preserving aspect ratio
-      const cw = el.clientWidth
-      const ch = el.clientHeight
-      const scale = Math.min(cw / CANVAS_W, ch / CANVAS_H)
+      // Use getBoundingClientRect for accurate post-layout dimensions
+      const rect = el.getBoundingClientRect()
+      const cw = Math.floor(rect.width)
+      const ch = Math.floor(rect.height)
+      const scale = cw > 0 && ch > 0 ? Math.min(cw / CANVAS_W, ch / CANVAS_H) : 1
       const displayW = Math.round(CANVAS_W * scale)
       const displayH = Math.round(CANVAS_H * scale)
 
+      // Absolute centering avoids the flex justify-center overflow bug
+      // where the left side gets clipped by overflow-hidden ancestors
+      canvas.style.position = 'absolute'
+      canvas.style.left = `${Math.round((cw - displayW) / 2)}px`
+      canvas.style.top  = `${Math.round((ch - displayH) / 2)}px`
       canvas.style.width = `${displayW}px`
       canvas.style.height = `${displayH}px`
       canvas.style.imageRendering = 'pixelated'
-      canvas.style.display = 'block'
       el.appendChild(canvas)
 
       initScene(app)
@@ -100,7 +105,7 @@ export default function OfficeCanvas(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="flex items-center justify-center w-full h-full bg-gba-black"
+      className="relative w-full h-full bg-gba-black overflow-hidden"
     />
   )
 }
