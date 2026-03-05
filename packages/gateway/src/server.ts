@@ -125,6 +125,7 @@ export function createGatewayServer(): http.Server {
           )
           eventBus.emit(WorkflowEventType.AGENT_CONNECTED, `Agent '${payload.name}' connected`, {
             agentId: payload.agentId,
+            data: { name: payload.name, role: payload.role, capabilities: payload.capabilities },
           })
           break
         }

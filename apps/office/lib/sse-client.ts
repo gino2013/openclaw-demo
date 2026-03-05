@@ -7,6 +7,7 @@ import { useOfficeStore } from './store'
 import { v4 as uuidv4 } from 'uuid'
 
 const SSE_URL = '/api/proxy/events'
+const REST_URL = (process.env['NEXT_PUBLIC_GATEWAY_REST_URL'] ?? 'http://localhost:18789') + '/agents'
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
 
@@ -145,12 +146,37 @@ function handleEvent(event: WorkflowEvent): void {
   }
 }
 
+/** Fetch current agent list from Gateway REST and seed the store. */
+async function bootstrapAgents(): Promise<void> {
+  try {
+    const res = await fetch(REST_URL)
+    const body = (await res.json()) as { agents: Array<{ id: string; name: string; role: string; status: string; connectedAt: string }> }
+    const store = useOfficeStore.getState()
+    for (const agent of body.agents) {
+      store.upsertAgent({
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        status: agent.status === 'busy' ? 'working' : 'idle',
+        taskProgress: 0,
+        recentTasks: [],
+        tokensUsed: 0,
+        connectedAt: agent.connectedAt,
+      })
+    }
+    console.info(`[SSE] Bootstrapped ${body.agents.length} agents from REST`)
+  } catch {
+    console.warn('[SSE] Could not bootstrap agents from REST')
+  }
+}
+
 /**
  * React hook that initialises the SSE connection once on mount.
  * Safe to call in multiple components — connection is shared.
  */
 export function useSSEClient(): void {
   useEffect(() => {
+    void bootstrapAgents()
     if (!es) connectSSE()
     return () => {
       // Keep connection alive across re-renders; only close on full unmount
