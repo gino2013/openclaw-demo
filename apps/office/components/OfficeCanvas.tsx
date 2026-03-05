@@ -10,10 +10,11 @@ import {
   triggerDelegationAnimation,
   playCelebration,
 } from '@/lib/pixi/scene'
+import { preloadSprites } from '@/lib/pixi/preload-sprites'
 import type { AgentRole } from '@openclaw/core'
 import { WorkflowEventType } from '@openclaw/core'
 
-const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 3)
+const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 2)
 const NATIVE_W = 320
 const NATIVE_H = 240
 
@@ -23,18 +24,20 @@ export default function OfficeCanvas(): React.JSX.Element {
 
   const { agents, pendingAnimations, completeDelegation, events } = useOfficeStore()
 
-  // Bootstrap Pixi — after init, sync any agents already in the store
+  // Bootstrap Pixi — preload sprites first, then init scene
   useEffect(() => {
     if (!containerRef.current || appRef.current) return
 
     const app = new PIXI.Application()
-    void app.init({
-      width: NATIVE_W,
-      height: NATIVE_H,
-      backgroundColor: 0x306230,
-      resolution: 1,
-      autoDensity: false,
-    }).then(() => {
+    void preloadSprites().then(() =>
+      app.init({
+        width: NATIVE_W,
+        height: NATIVE_H,
+        backgroundColor: 0x1a1a2e,
+        resolution: 1,
+        autoDensity: false,
+      })
+    ).then(() => {
       if (!containerRef.current) return
       appRef.current = app
 
@@ -42,11 +45,12 @@ export default function OfficeCanvas(): React.JSX.Element {
       canvas.style.width = `${NATIVE_W * SCALE}px`
       canvas.style.height = `${NATIVE_H * SCALE}px`
       canvas.style.imageRendering = 'pixelated'
+      canvas.style.display = 'block'
       containerRef.current.appendChild(canvas)
 
       initScene(app)
 
-      // ── Critical: sync agents that loaded before Pixi was ready ──
+      // Sync agents that arrived before Pixi was ready
       const { agents: currentAgents } = useOfficeStore.getState()
       for (const [id, agent] of currentAgents) {
         addAgentSprite(app, id, agent.name, agent.role as AgentRole)
@@ -93,7 +97,7 @@ export default function OfficeCanvas(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="flex items-center justify-center w-full h-full bg-gba-black"
+      className="flex items-start justify-start w-full h-full bg-gba-black overflow-hidden"
       style={{ imageRendering: 'pixelated' }}
     />
   )

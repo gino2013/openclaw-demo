@@ -30,8 +30,8 @@ export default function OfficePage(): React.JSX.Element {
 
       {/* Main content: canvas + right panel */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Office canvas — takes remaining space */}
-        <div className="flex-1 relative">
+        {/* Office canvas — takes remaining space, clipped to not cover side panel */}
+        <div className="flex-1 relative overflow-hidden">
           <OfficeCanvas />
         </div>
 
