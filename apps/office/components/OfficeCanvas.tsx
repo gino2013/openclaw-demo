@@ -11,12 +11,9 @@ import {
   playCelebration,
 } from '@/lib/pixi/scene'
 import { preloadSprites } from '@/lib/pixi/preload-sprites'
+import { CANVAS_W, CANVAS_H } from '@/lib/pixi/tilemap'
 import type { AgentRole } from '@openclaw/core'
 import { WorkflowEventType } from '@openclaw/core'
-
-const SCALE = Number(process.env['NEXT_PUBLIC_OFFICE_SCALE'] ?? 2)
-const NATIVE_W = 320
-const NATIVE_H = 240
 
 export default function OfficeCanvas(): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -24,33 +21,35 @@ export default function OfficeCanvas(): React.JSX.Element {
 
   const { agents, pendingAnimations, completeDelegation, events } = useOfficeStore()
 
-  // Bootstrap Pixi — preload sprites first, then init scene
   useEffect(() => {
     if (!containerRef.current || appRef.current) return
+    const el = containerRef.current
 
     const app = new PIXI.Application()
     void preloadSprites().then(() =>
       app.init({
-        width: NATIVE_W,
-        height: NATIVE_H,
+        width: CANVAS_W,
+        height: CANVAS_H,
+        // HiDPI: render at full device resolution for crisp text + sprites
+        resolution: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
+        autoDensity: true,   // canvas CSS size stays CANVAS_W × CANVAS_H
         backgroundColor: 0x1a1a2e,
-        resolution: 1,
-        autoDensity: false,
+        antialias: false,    // keep pixel art crisp
       })
     ).then(() => {
-      if (!containerRef.current) return
+      if (!el) return
       appRef.current = app
 
       const canvas = app.canvas as HTMLCanvasElement
-      canvas.style.width = `${NATIVE_W * SCALE}px`
-      canvas.style.height = `${NATIVE_H * SCALE}px`
+      // Fill the container — image-rendering: pixelated gives crisp nearest-neighbor upscale
+      canvas.style.width = '100%'
+      canvas.style.height = '100%'
       canvas.style.imageRendering = 'pixelated'
       canvas.style.display = 'block'
-      containerRef.current.appendChild(canvas)
+      el.appendChild(canvas)
 
       initScene(app)
 
-      // Sync agents that arrived before Pixi was ready
       const { agents: currentAgents } = useOfficeStore.getState()
       for (const [id, agent] of currentAgents) {
         addAgentSprite(app, id, agent.name, agent.role as AgentRole)
@@ -64,7 +63,6 @@ export default function OfficeCanvas(): React.JSX.Element {
     }
   }, [])
 
-  // Sync agents → sprites (handles agents that arrive after Pixi is ready)
   useEffect(() => {
     const app = appRef.current
     if (!app) return
@@ -74,7 +72,6 @@ export default function OfficeCanvas(): React.JSX.Element {
     }
   }, [agents])
 
-  // Play delegation animations
   useEffect(() => {
     const app = appRef.current
     if (!app) return
@@ -84,7 +81,6 @@ export default function OfficeCanvas(): React.JSX.Element {
     }
   }, [pendingAnimations, completeDelegation])
 
-  // Celebration on task complete
   useEffect(() => {
     const app = appRef.current
     if (!app) return
@@ -97,7 +93,7 @@ export default function OfficeCanvas(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="flex items-start justify-start w-full h-full bg-gba-black overflow-hidden"
+      className="w-full h-full bg-gba-black"
       style={{ imageRendering: 'pixelated' }}
     />
   )

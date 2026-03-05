@@ -1,23 +1,23 @@
 import * as PIXI from 'pixi.js'
 
-export const TILE_SIZE = 16
+export const TILE_SIZE = 32
 
-/** Native canvas size — bigger to match reference image layout */
-export const CANVAS_W = 320
-export const CANVAS_H = 240
+/** Native canvas size */
+export const CANVAS_W = 640
+export const CANVAS_H = 480
 
 const C = {
-  floor:      0xd4b878,   // warm wood floor
-  floorDark:  0xbc9c5c,   // floor shadow
-  wall:       0xd8c8a8,   // cream wall
-  wallShadow: 0xb8a880,   // wall shadow
-  wallTop:    0xe8dcc0,   // wall highlight
-  desk:       0x8c6840,   // desk brown
-  deskTop:    0xac8858,   // desk top surface
-  deskSide:   0x6c4820,   // desk side shadow
-  screen:     0x1a3a5c,   // monitor (off)
-  screenOn:   0x203050,   // monitor frame
-  screenGlow: 0x50c8ff,   // screen content
+  floor:      0xd4b878,
+  floorDark:  0xbc9c5c,
+  wall:       0xd8c8a8,
+  wallShadow: 0xb8a880,
+  wallTop:    0xe8dcc0,
+  desk:       0x8c6840,
+  deskTop:    0xac8858,
+  deskSide:   0x6c4820,
+  screen:     0x1a3a5c,
+  screenOn:   0x203050,
+  screenGlow: 0x50c8ff,
   plant:      0x408040,
   plantLight: 0x60b060,
   pot:        0x8c5030,
@@ -25,10 +25,9 @@ const C = {
   portal:     0x5020b0,
   portalGlow: 0x8040ff,
   portalCore: 0xd0a0ff,
-  cable:      0x606060,   // connector lines between agents
 } as const
 
-// ── Tile factories ────────────────────────────────────────────────────────
+// ── Tile factories (all values are in 32×32 coordinate space) ─────────────
 
 function tile(draw: (g: PIXI.Graphics) => void): PIXI.Graphics {
   const g = new PIXI.Graphics()
@@ -38,37 +37,36 @@ function tile(draw: (g: PIXI.Graphics) => void): PIXI.Graphics {
 
 const makeFloor = (): PIXI.Graphics => tile((g) => {
   g.rect(0, 0, TILE_SIZE, TILE_SIZE); g.fill(C.floor)
-  g.rect(0, 0, TILE_SIZE, 1);        g.fill(C.floorDark)
-  g.rect(0, 0, 1, TILE_SIZE);        g.fill(C.floorDark)
+  g.rect(0, 0, TILE_SIZE, 2);         g.fill(C.floorDark)
+  g.rect(0, 0, 2, TILE_SIZE);         g.fill(C.floorDark)
 })
 
 const makeWall = (): PIXI.Graphics => tile((g) => {
   g.rect(0, 0, TILE_SIZE, TILE_SIZE); g.fill(C.wall)
-  g.rect(0, 0, TILE_SIZE, 2);         g.fill(C.wallTop)
-  g.rect(0, TILE_SIZE - 2, TILE_SIZE, 2); g.fill(C.wallShadow)
+  g.rect(0, 0, TILE_SIZE, 4);         g.fill(C.wallTop)
+  g.rect(0, TILE_SIZE - 4, TILE_SIZE, 4); g.fill(C.wallShadow)
 })
 
-/** Desk tile — shows top surface + monitor */
 const makeDesk = (): PIXI.Graphics => tile((g) => {
-  // Desk top
-  g.rect(0, 2, TILE_SIZE, 10); g.fill(C.deskTop)
-  g.rect(0, 2, TILE_SIZE, 2);  g.fill(C.desk)
-  g.rect(0, 12, TILE_SIZE, 4); g.fill(C.deskSide)
+  // Desk top surface
+  g.rect(0, 4,  TILE_SIZE, 20); g.fill(C.deskTop)
+  g.rect(0, 4,  TILE_SIZE, 4);  g.fill(C.desk)
+  g.rect(0, 24, TILE_SIZE, 8);  g.fill(C.deskSide)
   // Monitor
-  g.rect(3, 4, 10, 6);  g.fill(C.screenOn)
-  g.rect(4, 5, 8, 4);   g.fill(C.screenGlow)
+  g.rect(6,  8, 20, 12); g.fill(C.screenOn)
+  g.rect(8, 10, 16,  8); g.fill(C.screenGlow)
   // Stand
-  g.rect(7, 10, 2, 2);  g.fill(C.deskSide)
+  g.rect(14, 20, 4, 4);  g.fill(C.deskSide)
 })
 
 const makePlant = (): PIXI.Graphics => tile((g) => {
   g.rect(0, 0, TILE_SIZE, TILE_SIZE); g.fill(C.floor)
-  g.rect(5, 9, 6, 6);  g.fill(C.pot)
-  g.rect(5, 9, 6, 2);  g.fill(C.potDark)
-  g.ellipse(8, 7, 5, 6); g.fill(C.plant)
-  g.ellipse(5, 9, 3, 3); g.fill(C.plant)
-  g.ellipse(11, 9, 3, 3); g.fill(C.plant)
-  g.ellipse(8, 5, 3, 4); g.fill(C.plantLight)
+  g.rect(10, 18, 12, 12); g.fill(C.pot)
+  g.rect(10, 18, 12,  4); g.fill(C.potDark)
+  g.ellipse(16, 14, 10, 12); g.fill(C.plant)
+  g.ellipse(10, 18,  6,  6); g.fill(C.plant)
+  g.ellipse(22, 18,  6,  6); g.fill(C.plant)
+  g.ellipse(16, 10,  6,  8); g.fill(C.plantLight)
 })
 
 export function makePortalTile(app: PIXI.Application): PIXI.Container {
@@ -82,16 +80,16 @@ export function makePortalTile(app: PIXI.Application): PIXI.Container {
   app.ticker.add(() => {
     t += 0.05
     glow.clear()
-    const r = 5 + Math.sin(t) * 1.5
-    glow.ellipse(8, 8, r, r + 2); glow.fill(C.portal)
-    glow.ellipse(8, 8, r - 2, r); glow.fill(C.portalGlow)
-    glow.ellipse(8, 8, 2, 2);     glow.fill(C.portalCore)
+    const r = 10 + Math.sin(t) * 3
+    glow.ellipse(16, 16, r, r + 4); glow.fill(C.portal)
+    glow.ellipse(16, 16, r - 4, r); glow.fill(C.portalGlow)
+    glow.ellipse(16, 16, 4, 4);     glow.fill(C.portalCore)
   })
   return c
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────
-// 20 cols × 15 rows @ 16px = 320×240
+// 20 cols × 15 rows @ 32px = 640×480
 type T = 'f' | 'w' | 'd' | 'p' | '.'
 
 // prettier-ignore
@@ -130,24 +128,23 @@ export function buildTilemap(container: PIXI.Container, app: PIXI.Application): 
     }
   }
 
-  // Portal — top-left open area
   const portal = makePortalTile(app)
   portal.position.set(9 * TILE_SIZE, 6 * TILE_SIZE)
   container.addChild(portal)
 }
 
 /**
- * Seat positions (in tile coordinates) — where each agent stands.
- * Layout mirrors reference: agents at desks around the room.
+ * Seat positions (tile coordinates) where agents stand.
+ * Orchestrator at seat 0 (portal), others at desks.
  */
 export const SEAT_POSITIONS: ReadonlyArray<{ x: number; y: number }> = [
-  { x: 9,  y: 6  },  // 0: Orchestrator — center (portal)
-  { x: 2,  y: 2  },  // 1: Dev Alpha    — top-left desk
-  { x: 5,  y: 2  },  // 2: Dev Beta     — top desk
-  { x: 14, y: 2  },  // 3: Reviewer     — top-right desk
-  { x: 17, y: 2  },  // 4: Analyst      — far top-right
-  { x: 2,  y: 5  },  // 5: extra slot
-  { x: 17, y: 5  },  // 6: extra slot
-  { x: 2,  y: 8  },  // 7: extra slot
-  { x: 8,  y: 8  },  // 8: extra slot
+  { x: 9,  y: 6  },  // 0: Orchestrator — portal center
+  { x: 2,  y: 2  },  // 1: slot — top-left desk
+  { x: 5,  y: 2  },  // 2: slot — top desk
+  { x: 14, y: 2  },  // 3: slot — top-right desk
+  { x: 17, y: 2  },  // 4: slot — far top-right
+  { x: 2,  y: 5  },  // 5: slot — mid-left desk
+  { x: 17, y: 5  },  // 6: slot — mid-right desk
+  { x: 2,  y: 8  },  // 7: slot — bottom-left desk
+  { x: 8,  y: 8  },  // 8: slot — bottom desk
 ]
